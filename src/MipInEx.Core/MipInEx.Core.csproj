@@ -1,0 +1,28 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="$(SolutionDir)/UnityDir.props" />
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>10</LangVersion>
+    <Nullable>enable</Nullable>
+    <RootNamespace>MipInEx</RootNamespace>
+    <GenerateDocumentationFile>True</GenerateDocumentationFile>
+    <DefineConstants>$(DefineConstants);UNITY_ENGINE</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Mono.Cecil" Version="0.11.4" />
+    <PackageReference Include="System.Collections.Immutable" Version="8.0.0" />
+    <PackageReference Include="System.Text.Json" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Harmony\Harmony.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="$(UnityPath)/Editor/Data/Managed/UnityEngine/UnityEngine.dll" Private="false" />
+    <Reference Include="$(UnityPath)/Editor/Data/Managed/UnityEngine/UnityEngine.CoreModule.dll" Private="false" />
+    <Reference Include="$(UnityPath)/Editor/Data/Managed/UnityEngine/UnityEngine.AssetBundleModule.dll" Private="false" />
+  </ItemGroup>
+</Project>

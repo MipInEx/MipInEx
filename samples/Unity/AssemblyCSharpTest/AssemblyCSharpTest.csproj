@@ -1,0 +1,21 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="$(SolutionDir)/UnityDir.props" />
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <Nullable>enable</Nullable>
+    <RootNamespace>TestGame</RootNamespace>
+    <AssemblyName>Assembly-CSharp</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="$(SolutionDir)\src\MipInEx.Core\MipInEx.Core.csproj" />
+  </ItemGroup>
+    
+  <ItemGroup>
+    <Reference Include="$(UnityPath)/Editor/Data/Managed/UnityEngine/UnityEngine.dll" Private="false" />
+    <Reference Include="$(UnityPath)/Editor/Data/Managed/UnityEngine/UnityEngine.CoreModule.dll" Private="false" />
+    <Reference Include="$(UnityPath)/Editor/Data/Managed/UnityEngine/UnityEngine.AssetBundleModule.dll" Private="false" />
+  </ItemGroup>
+
+</Project>

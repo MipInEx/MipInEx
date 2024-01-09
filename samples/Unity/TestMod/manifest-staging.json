@@ -1,0 +1,29 @@
+{
+    "guid": "dev.flaff.TestMod",
+    "name": "TestMod",
+    "version": "1.0.0",
+    "description": "A test mod.",
+    "author": "Flaff",
+    "dependencies": [
+        {
+            "guid": "dev.Foo.OtherMod",
+            "required": false
+        }
+    ], 
+    "incompatibilities": [],
+    "assets": [
+        {
+            "asset_path": "TestMod",
+            "priority": 0,
+            "plugin": {},
+            "internal_plugins": [
+                {
+                    "guid": "OtherMod.Additions",
+                    "priority": 0,
+                    "load_manually": true
+                }
+            ],
+            "type": "Assembly"
+        }
+    ]
+}

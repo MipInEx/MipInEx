@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <Nullable>enable</Nullable>
+    <Product>HarmonyZ</Product>
+    <Company>Flaff</Company>
+    <Description>A library for patching, replacing and decorating .NET and Mono methods during runtime powered by MonoMod.</Description>
+    <Authors>Andreas Pardeike, Geoffrey Horsington, ManlyMarco et al.</Authors>
+    <AssemblyName>0Harmony</AssemblyName>
+    <SignAssembly>true</SignAssembly>
+    <Version>2.11.0</Version>
+    <AssemblyVersion>2.10.2.0</AssemblyVersion>
+    <FileVersion>2.10.2.0</FileVersion>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>HarmonyLib</RootNamespace>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <Optimize>false</Optimize>
+    <DebugType>full</DebugType>
+    <DebugSymbols>true</DebugSymbols>
+    <DefineConstants>$(DefineConstants);DEBUG</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <Optimize>true</Optimize>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Reference MonoMod.RuntimeDetour for our detour needs -->
+    <PackageReference Include="MonoMod.RuntimeDetour" Version="25.0.0" />
+    
+    <!-- Reference SRE helpers for .NET Standard -->
+    <PackageReference Include="System.Reflection.Emit" Version="4.7.0" Condition="'$(TargetFramework)' == 'netstandard2.1'" />
+    <PackageReference Include="System.Reflection.Emit.Lightweight" Version="4.7.0" Condition="'$(TargetFramework)' == 'netstandard2.1'" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,109 @@
+// type: ModManifest
+{
+    // The globally unique identifier of the mod.
+    // 
+    // Must be between 1 and 256 characters (inclusive) in
+    // length, and can only contain letters, numbers, periods,
+    // underscores, and dashes.
+    "guid": "dev.flaff.TestMod", // type: string
+    // The name of the mod.
+    //
+    // Must be between 1 and 256 characters (inclusive).
+    // Leading and trailing whitespace are automatically
+    // removed.
+    "name": "TestMod", // type: string
+    // The version of this mod.
+    "version": "1.0.0", // type: string
+    // The short description of the mod.
+    // 
+    // Must be between 0 and 512 characters (inclusive).
+    // Leading and trailing whitespace are automatically
+    // removed.
+    "description": "A test mod.", // type: string
+    // The author of the mod.
+    // 
+    // Must be between 1 and 256 characters (inclusive).
+    // Leading and trailing whitespace are automatically
+    // removed.
+    "author": "Flaff", // type: string
+    // A readonly list of dependencies for this mod.
+    "dependencies": [ // type: IReadOnlyList<ModDependencyInfo>
+        {
+            // The GUID of the mod this reference is for.
+            "guid": "dev.Foo.OtherMod", // type: string
+            // Whether or not this dependency is required for
+            // the mod to function.
+            "required": false // type: boolean
+        }
+    ], 
+    // A readonly list of incompatibilities for this mod.
+    "incompatibilities": [], // type: IReadOnlyList<ModIncompatibilityInfo>
+    // A list of assets for this mod.
+    // 
+    // All assets don't need to be specified. Unspecified
+    // assets will have their settings set to default, and
+    // a load priority of 0.
+    "assets": [ // type: IReadOnlyList<IModManifestAsset>
+        // type: ModManifestAssembly
+        {
+            // The asset path of this assembly.
+            //
+            // The assembly will be located at
+            // ModRootFolder/Assemblies/$(AssetPath).dll
+            // where $(AssetPath) is this asset path value.
+            "asset_path": "TestMod", // type: string
+            // The load priority of this assembly. The higher the
+            // value, the higher the priority.
+            //
+            // Assemblies not specified will have a load priority of
+            // 0.
+            "load_priority": 0, // type: long
+            // The settings for the root plugin in this assembly.
+            "plugin": {}, // type: ModManifestRootPlugin
+            // A collection of the settings for the internal plugins
+            // in the assembly.
+            "internal_plugins": [
+                {
+                    // The GUID of the internal plugin.
+                    "guid": "OtherMod.Additions", // type: string
+                    // The load priority of this internal plugin.
+                    // The higher the value, the higher the priority.
+                    //
+                    // Internal plugins not specified will have a load
+                    // priority of 0.
+                    "load_priority": 0, // type: long
+                    // Whether or not this internal plugin needs to be
+                    // explicitly loaded (aka manually loaded)
+                    //
+                    // If set to load automatically, then this internal
+                    // plugin will load AFTER the root plugin loads.
+                    "load_manually": true // type: boolean
+                }
+            ], // type: IReadOnlyList<ModManifestInternalPlugin>
+            // The type of this asset.
+            "type": "Assembly" // type: ModAssetType
+        },
+        // type: ModManifestAssetBundle
+        {
+            // The asset path of this asset bundle.
+            //
+            // The asset bundle will be located at
+            // ModRootFolder/Asset Bundles/$(AssetPath).bundle
+            // where $(AssetPath) is this asset path value.
+            "asset_path": "assets", // type: string
+            // The load priority of this asset bundle. The higher the
+            // value, the higher the priority.
+            //
+            // Asset bundles not specified will have a load priority
+            // of 0.
+            "load_priority": 0, // type: long
+            // Whether or not this asset bundle needs to be explicitly
+            // loaded (aka manually loaded)
+            //
+            // Defaults to false.
+            "manual_load": true, // type: boolean
+            // The type of this asset.
+            "type": "AssetBundle" // type: ModAssetType
+        }
+    ]
+}
