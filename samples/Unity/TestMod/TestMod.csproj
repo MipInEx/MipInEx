@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\AssemblyCSharpTest\AssemblyCSharpTest.csproj" />
+    <ProjectReference Include="$(SolutionDir)\src\Harmony\Harmony.csproj" />
     <ProjectReference Include="$(SolutionDir)\src\MipInEx.Core\MipInEx.Core.csproj" />
   </ItemGroup>
 
