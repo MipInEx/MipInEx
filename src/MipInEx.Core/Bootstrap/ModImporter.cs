@@ -41,17 +41,17 @@ internal abstract class ModImporter : IDisposable
     protected abstract bool TryImportIcon([NotNullWhen(true)] out byte[]? iconData);
     protected abstract bool TryImportCHANGELOG([NotNullWhen(true)] out string? changelog);
 
-    protected abstract IEnumerable<ModAssemblyLoader> GetAssemblyLoaders();
-    protected abstract IEnumerable<ModAssetBundleLoader> GetAssetBundleLoaders();
+    protected abstract IEnumerable<ModAssemblyImporter> GetAssemblyImporters();
+    protected abstract IEnumerable<ModAssetBundleImporter> GetAssetBundleImporters();
 
     protected virtual ImmutableArray<AssemblyInfo> ImportAssemblies(ModManifest manifest)
     {
         Dictionary<string, ModAsmLoadInfo> modAssemblies = new();
         Dictionary<string, AssemblyInfo> pluginAssemblies = new();
 
-        foreach (ModAssemblyLoader assemblyLoader in this.GetAssemblyLoaders())
+        foreach (ModAssemblyImporter assemblyImporter in this.GetAssemblyImporters())
         {
-            string fullAssetPath = assemblyLoader.AssetPath;
+            string fullAssetPath = assemblyImporter.FullAssetPath;
             string modAssetPath = manifest.Guid + "/" + fullAssetPath;
             string assetPath = Utility.ShortenAssetPathWithoutExtension(
                 fullAssetPath,
@@ -66,33 +66,34 @@ internal abstract class ModImporter : IDisposable
 
             try
             {
-                using Stream dllStream = assemblyLoader.OpenRead();
+                using Stream dllStream = assemblyImporter.OpenRead();
 
                 string hash = Utility.HashStream(dllStream);
                 dllStream.Position = 0;
 
 
-                if (this.assemblyCache != null && this.assemblyCache.TryGetValue(modAssetPath, out CachedAssembly? cachedAssembly))
+                if (this.assemblyCache != null &&
+                    this.assemblyCache.TryGetValue(modAssetPath, out CachedAssembly? cachedAssembly) &&
+                    cachedAssembly.Hash == hash)
                 {
-                    if (cachedAssembly.Hash == hash)
+
+                    modAssemblies[cachedAssembly.Name] = new ModAsmLoadInfo(
+                        assemblyImporter,
+                        cachedAssembly.Name,
+                        cachedAssembly.IsPluginAssembly,
+                        cachedAssembly.AssemblyReferences);
+
+                    if (cachedAssembly.IsPluginAssembly)
                     {
-                        bool isPluginAssembly = cachedAssembly.MainPlugin is not null || cachedAssembly.InternalPlugins.Count > 0;
-
-                        modAssemblies[cachedAssembly.Name] = new ModAsmLoadInfo(
-                            assemblyLoader,
-                            cachedAssembly.Name,
-                            isPluginAssembly,
-                            cachedAssembly.AssemblyReferences);
-
-                        if (isPluginAssembly)
-                        {
-                            pluginAssemblies[modAssetPath] = new AssemblyInfo(
-                                assemblyLoader,
-                                assemblyManifest,
-                                cachedAssembly.MainPlugin!,
-                                cachedAssembly.InternalPlugins);
-                        }
-                        continue;
+                        pluginAssemblies[modAssetPath] = new AssemblyInfo(
+                            assemblyImporter,
+                            assemblyManifest,
+                            cachedAssembly.MainPlugin!,
+                            cachedAssembly.InternalPlugins);
+                    }
+                    else if (cachedAssembly.HasInternalPlugins)
+                    {
+                        Logger.Log(LogLevel.Warning, $"Mod '{manifest.Name}': Skipping {modAssetPath} as a plugin assembly: Even though internal plugins are defined, no main plugin is!");
                     }
                 }
 
@@ -113,123 +114,32 @@ internal abstract class ModImporter : IDisposable
 
                 Logger.Log(LogLevel.Debug, $"Mod '{manifest.Name}': Examining '{modAssetPath}'");
 
-                foreach (TypeDefinition typeDefinition in assembly.MainModule.Types)
-                {
-                    if (typeDefinition.IsInterface || typeDefinition.IsAbstract)
-                        continue;
-
-                    TypeDefinitionReference? resultReference = null;
-                    bool isInternalPlugin = false;
-
-                    TypeDefinition? baseTypeDefinition = typeDefinition.BaseType?.Resolve();
-                    while (baseTypeDefinition != null)
-                    {
-                        if (baseTypeDefinition.FullName == "System.Object")
-                            break;
-
-                        if (baseTypeDefinition.Namespace == Utility.pluginTypeNamespace)
-                        {
-                            if (baseTypeDefinition.Name == Utility.pluginTypeName)
-                            {
-                                if (!baseTypeDefinition.IsGenericInstance)
-                                {
-                                    resultReference = TypeDefinitionReference.Create(typeDefinition);
-                                    isInternalPlugin = false;
-                                    break;
-                                }
-                            }
-                            else if (baseTypeDefinition.Name == Utility.internalPluginTypeName)
-                            {
-                                int genericParameterCount = baseTypeDefinition.GenericParameters.Count;
-
-                                if (genericParameterCount == 0 || genericParameterCount == 1)
-                                {
-                                    resultReference = TypeDefinitionReference.Create(typeDefinition);
-                                    isInternalPlugin = true;
-                                    break;
-                                }
-                            }
-                        }
-
-                        baseTypeDefinition = baseTypeDefinition.BaseType?.Resolve();
-                    }
-
-                    if (resultReference is null)
-                        continue;
-
-                    if (isInternalPlugin)
-                    {
-                        CustomAttribute? attribute = Utility.GetInternalPluginInfoAttribute(typeDefinition);
-                        if (attribute is null)
-                            continue;
-
-                        string? guid = (string?)attribute.ConstructorArguments[0].Value;
-                        string? name = (string?)attribute.ConstructorArguments[1].Value;
-                        string? versionString = (string?)attribute.ConstructorArguments[2].Value;
-
-                        name = name?.Trim();
-
-                        if (!ModPropertyUtil.TryValidateGuid(guid) ||
-                            !ModPropertyUtil.TryValidateName(name) ||
-                            !Version.TryParse(versionString, out Version? version))
-                        {
-                            continue;
-                        }
-
-                        cachedAssembly.InternalPlugins.Add(new PluginReference(resultReference, name!, guid!, version));
-                    }
-                    else
-                    {
-                        CustomAttribute? attribute = Utility.GetPluginInfoAttribute(typeDefinition);
-                        if (attribute is null)
-                            continue;
-
-                        string guid;
-                        string name;
-                        Version version;
-
-                        if (attribute.ConstructorArguments.Count == 0)
-                        {
-                            guid = manifest.Guid;
-                            name = manifest.Name;
-                            version = manifest.Version;
-                        }
-                        else
-                        {
-                            guid = (string?)attribute.ConstructorArguments[0].Value!;
-                            name = (string?)attribute.ConstructorArguments[1].Value!;
-                            string? versionString = (string?)attribute.ConstructorArguments[2].Value;
-
-                            name = name?.Trim()!;
-
-                            if (!ModPropertyUtil.TryValidateGuid(guid) ||
-                                !ModPropertyUtil.TryValidateName(name) ||
-                                !Version.TryParse(versionString, out version))
-                            {
-                                continue;
-                            }
-                        }
-
-                        cachedAssembly.MainPlugin = new PluginReference(resultReference, name, guid, version);
-                    }
-                }
-
-                pluginAssemblies[modAssetPath] = new AssemblyInfo(
-                    assemblyLoader,
-                    assemblyManifest,
-                    cachedAssembly.MainPlugin,
-                    cachedAssembly.InternalPlugins);
-
-                modAssemblies[cachedAssembly.Name] = new ModAsmLoadInfo(
-                    assemblyLoader,
-                    cachedAssembly.Name,
-                    cachedAssembly.MainPlugin is not null || cachedAssembly.InternalPlugins.Count > 0,
-                    cachedAssembly.AssemblyReferences);
+                cachedAssembly.InitializeFromCecilAssembly(assembly, manifest);
 
                 if (this.assemblyCache != null)
                 {
                     this.assemblyCache[modAssetPath] = cachedAssembly;
                 }
+
+                modAssemblies[cachedAssembly.Name] = new ModAsmLoadInfo(
+                    assemblyImporter,
+                    cachedAssembly.Name,
+                    cachedAssembly.IsPluginAssembly,
+                    cachedAssembly.AssemblyReferences);
+
+                if (cachedAssembly.IsPluginAssembly)
+                {
+                    pluginAssemblies[modAssetPath] = new AssemblyInfo(
+                        assemblyImporter,
+                        assemblyManifest,
+                        cachedAssembly.MainPlugin!,
+                        cachedAssembly.InternalPlugins);
+                }
+                else if (cachedAssembly.HasInternalPlugins)
+                {
+                    Logger.Log(LogLevel.Warning, $"Mod '{manifest.Name}': Skipping {modAssetPath} as a plugin assembly: Even though internal plugins are defined, no main plugin is!");
+                }
+
             }
             catch (BadImageFormatException e)
             {
@@ -243,7 +153,7 @@ internal abstract class ModImporter : IDisposable
 
         foreach (KeyValuePair<string, ModAsmLoadInfo> modAssemblyEntry in modAssemblies)
         {
-            Stack<(ModAssemblyLoader? loader, Queue<string> queuedDependencies)> assemblyStack = new();
+            Stack<(ModAssemblyImporter? loader, Queue<string> queuedDependencies)> assemblyStack = new();
             ModAsmLoadInfo modAssembly = modAssemblyEntry.Value;
 
             Queue<string> queuedDependencies = new(modAssembly.assemblyReferences);
@@ -254,10 +164,10 @@ internal abstract class ModImporter : IDisposable
             }
             else
             {
-                assemblyStack.Push((modAssembly.loader, queuedDependencies));
+                assemblyStack.Push((modAssembly.importer, queuedDependencies));
             }
 
-            while (assemblyStack.TryPeek(out (ModAssemblyLoader? loader, Queue<string> queuedDependencies) frame))
+            while (assemblyStack.TryPeek(out (ModAssemblyImporter? importer, Queue<string> queuedDependencies) frame))
             {
                 if (frame.queuedDependencies.TryDequeue(out string? dependency))
                 {
@@ -268,39 +178,19 @@ internal abstract class ModImporter : IDisposable
                             break;
                         }
 
-                        assemblyStack.Push((loadInfo.loader, new(loadInfo.assemblyReferences)));
+                        assemblyStack.Push((loadInfo.importer, new(loadInfo.assemblyReferences)));
                     }
                     continue;
                 }
 
-                frame.loader?.Load();
+                frame.importer?.Import();
                 assemblyStack.Pop();
             }
         }
 
-        ImmutableArray<AssemblyInfo>.Builder assemblyBuilder = ImmutableArray.CreateBuilder<AssemblyInfo>();
-
-        foreach (KeyValuePair<string, AssemblyInfo> asmEntry in pluginAssemblies)
+        if (pluginAssemblies.Count > 0)
         {
-            string asmPath = asmEntry.Key;
-            AssemblyInfo asm = asmEntry.Value;
-
-            if (asm.rootPluginReference is null)
-            {
-                if (asm.internalPluginReferences.Count > 0)
-                {
-                    Logger.Log(LogLevel.Warning, $"Mod '{manifest.Name}': Skipping loading {asmPath} because even though internal plugins are defined, no main plugin is!");
-                }
-
-                continue;
-            }
-
-            assemblyBuilder.Add(asm);
-        }
-
-        if (assemblyBuilder.Count > 0)
-        {
-            return assemblyBuilder.ToImmutable();
+            return pluginAssemblies.Values.ToImmutableArray();
         }
         else
         {
@@ -312,10 +202,10 @@ internal abstract class ModImporter : IDisposable
     {
         ImmutableArray<AssetBundleInfo>.Builder assetBundleBuilder = ImmutableArray.CreateBuilder<AssetBundleInfo>();
 
-        foreach (ModAssetBundleLoader assetBundleLoader in this.GetAssetBundleLoaders())
+        foreach (ModAssetBundleImporter assetBundleImporter in this.GetAssetBundleImporters())
         {
             string assetPath = Utility.ShortenAssetPathWithoutExtension(
-                assetBundleLoader.LongAssetPath,
+                assetBundleImporter.FullAssetPath,
                 "Asset Bundles",
                 ".bundle",
                 StringComparison.OrdinalIgnoreCase);
@@ -327,7 +217,7 @@ internal abstract class ModImporter : IDisposable
 
             assetBundleBuilder.Add(
                 new AssetBundleInfo(
-                    assetBundleLoader, 
+                    assetBundleImporter, 
                     assetBundleManifest));
         }
 
@@ -346,18 +236,18 @@ internal abstract class ModImporter : IDisposable
 
     private sealed class ModAsmLoadInfo
     {
-        public readonly ModAssemblyLoader loader;
+        public readonly ModAssemblyImporter importer;
         public readonly string name;
         public readonly bool isPluginAssembly;
         public readonly List<string> assemblyReferences;
 
         public ModAsmLoadInfo(
-            ModAssemblyLoader loader,
+            ModAssemblyImporter importer,
             string name,
             bool isPluginAssembly,
             List<string> assemblyReferences)
         {
-            this.loader = loader;
+            this.importer = importer;
             this.name = name;
             this.isPluginAssembly = isPluginAssembly;
             this.assemblyReferences = assemblyReferences;
@@ -366,18 +256,18 @@ internal abstract class ModImporter : IDisposable
 
     protected internal sealed class AssemblyInfo
     {
-        public readonly ModAssemblyLoader loader;
+        public readonly ModAssemblyImporter importer;
         public readonly ModAssemblyManifest manifest;
         public readonly PluginReference rootPluginReference;
         public readonly List<PluginReference> internalPluginReferences;
 
         public AssemblyInfo(
-            ModAssemblyLoader loader,
+            ModAssemblyImporter importer,
             ModAssemblyManifest manifest,
             PluginReference rootPluginReference,
             List<PluginReference> internalPluginReferences)
         {
-            this.loader = loader;
+            this.importer = importer;
             this.manifest = manifest;
             this.rootPluginReference = rootPluginReference;
             this.internalPluginReferences = internalPluginReferences;
@@ -386,14 +276,14 @@ internal abstract class ModImporter : IDisposable
 
     protected internal sealed class AssetBundleInfo
     {
-        public readonly ModAssetBundleLoader loader;
+        public readonly ModAssetBundleImporter importer;
         public readonly ModAssetBundleManifest manifest;
 
         public AssetBundleInfo(
-            ModAssetBundleLoader loader,
+            ModAssetBundleImporter importer,
             ModAssetBundleManifest manifest)
         {
-            this.loader = loader;
+            this.importer = importer;
             this.manifest = manifest;
         }
     }
@@ -697,7 +587,7 @@ internal abstract class ModImporter : IDisposable
             return true;
         }
 
-        protected sealed override IEnumerable<ModAssemblyLoader> GetAssemblyLoaders()
+        protected sealed override IEnumerable<ModAssemblyImporter> GetAssemblyImporters()
         {
             // assembliesDirectory will be populated
             foreach (string dllPath in Directory.GetFiles(this.assembliesDirectory, "*.dll", SearchOption.AllDirectories))
@@ -707,11 +597,11 @@ internal abstract class ModImporter : IDisposable
                     "Assemblies",
                     StringComparison.OrdinalIgnoreCase);
 
-                yield return ModAssemblyLoader.FromFile(dllPath, assetPath);
+                yield return ModAssemblyImporter.FromFile(dllPath, assetPath);
             }
         }
 
-        protected sealed override IEnumerable<ModAssetBundleLoader> GetAssetBundleLoaders()
+        protected sealed override IEnumerable<ModAssetBundleImporter> GetAssetBundleImporters()
         {
             // assetBundlesDirectory will be populated
             foreach (string bundlePath in Directory.GetFiles(this.assetBundlesDirectory, "*.bundle", SearchOption.AllDirectories))
@@ -721,7 +611,7 @@ internal abstract class ModImporter : IDisposable
                     "Asset Bundles",
                     StringComparison.OrdinalIgnoreCase);
 
-                yield return ModAssetBundleLoader.FromFile(bundlePath, assetPath);
+                yield return ModAssetBundleImporter.FromFile(bundlePath, assetPath);
             }
         }
 
@@ -985,19 +875,19 @@ internal abstract class ModImporter : IDisposable
             return true;
         }
 
-        protected sealed override IEnumerable<ModAssemblyLoader> GetAssemblyLoaders()
+        protected sealed override IEnumerable<ModAssemblyImporter> GetAssemblyImporters()
         {
             foreach (ZipArchiveEntry assemblyZipEntry in this.assemblyEntries)
             {
-                yield return ModAssemblyLoader.FromZipArchive(assemblyZipEntry);
+                yield return ModAssemblyImporter.FromZipArchive(assemblyZipEntry);
             }
         }
 
-        protected sealed override IEnumerable<ModAssetBundleLoader> GetAssetBundleLoaders()
+        protected sealed override IEnumerable<ModAssetBundleImporter> GetAssetBundleImporters()
         {
             foreach (ZipArchiveEntry assetBundleZipEntry in this.assetBundleEntries)
             {
-                yield return ModAssetBundleLoader.FromZipArchive(assetBundleZipEntry);
+                yield return ModAssetBundleImporter.FromZipArchive(assetBundleZipEntry);
             }
         }
 
@@ -1058,9 +948,9 @@ internal abstract class ModImporter : IDisposable
                 this.TryImportCHANGELOG(out _);
 
                 // this will consume the reader, even though we dont use it.
-                this.GetAssetBundleLoaders().ToArray();
+                this.GetAssetBundleImporters().ToArray();
                 // this will consume the reader, even though we dont use it.
-                this.GetAssemblyLoaders().ToArray();
+                this.GetAssemblyImporters().ToArray();
 
                 mod = null;
                 return false;
@@ -1154,22 +1044,22 @@ internal abstract class ModImporter : IDisposable
             return true;
         }
 
-        protected sealed override IEnumerable<ModAssemblyLoader> GetAssemblyLoaders()
+        protected sealed override IEnumerable<ModAssemblyImporter> GetAssemblyImporters()
         {
             int assemblyCount = this.binaryReader.ReadInt32();
             while (assemblyCount > 0)
             {
-                yield return ModAssemblyLoader.FromBinaryReader(this.binaryReader);
+                yield return ModAssemblyImporter.FromBinaryReader(this.binaryReader);
                 assemblyCount--;
             }
         }
 
-        protected sealed override IEnumerable<ModAssetBundleLoader> GetAssetBundleLoaders()
+        protected sealed override IEnumerable<ModAssetBundleImporter> GetAssetBundleImporters()
         {
             int assetBundleCount = this.binaryReader.ReadInt32();
             while (assetBundleCount > 0)
             {
-                yield return ModAssetBundleLoader.FromBinaryReader(this.binaryReader);
+                yield return ModAssetBundleImporter.FromBinaryReader(this.binaryReader);
                 assetBundleCount--;
             }
         }

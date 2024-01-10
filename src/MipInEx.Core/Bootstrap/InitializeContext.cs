@@ -15,17 +15,26 @@ namespace MipInEx.Bootstrap;
 internal sealed class InitializeContext
 {
     private readonly ModManagerBase modManager;
-    private readonly string rootDirectory;
+    private readonly string modsDirectory;
+    private readonly string gameAssembliesDirectory;
+    private readonly string assemblyCachePath;
     private readonly bool useAssemblyCache;
     private Dictionary<string, CachedAssembly>? assemblyCache;
     private readonly DefaultAssemblyResolver cecilResolver;
     private readonly ReaderParameters readerParameters;
     private readonly JsonSerializerOptions serializerOptions;
     
-    public InitializeContext(ModManagerBase modManager, string rootDirectory, bool useAssemblyCache)
+    public InitializeContext(
+        ModManagerBase modManager,
+        string modsDirectory,
+        string gameAssembliesDirectory,
+        string assemblyCachePath,
+        bool useAssemblyCache)
     {
         this.modManager = modManager;
-        this.rootDirectory = rootDirectory;
+        this.modsDirectory = modsDirectory;
+        this.gameAssembliesDirectory = gameAssembliesDirectory;
+        this.assemblyCachePath = assemblyCachePath;
         this.assemblyCache = null;
         this.useAssemblyCache = useAssemblyCache;
 
@@ -68,7 +77,7 @@ internal sealed class InitializeContext
 
         string fileName = $"{assemblyName.Name}.dll";
 
-        string path = Path.Combine(this.modManager.Paths.GameAssembliesDirectory, fileName);
+        string path = Path.Combine(this.gameAssembliesDirectory, fileName);
         try
         {
             if (File.Exists(path))
@@ -79,7 +88,7 @@ internal sealed class InitializeContext
         catch { }
 
 
-        foreach (string subDirectory in Directory.GetDirectories(this.modManager.Paths.ModsDirectory, "*", SearchOption.AllDirectories))
+        foreach (string subDirectory in Directory.GetDirectories(this.modsDirectory, "*", SearchOption.AllDirectories))
         {
             path = Path.Combine(subDirectory, fileName);
             try
@@ -103,7 +112,7 @@ internal sealed class InitializeContext
         if (!this.useAssemblyCache)
             return;
 
-        string cacheFilePath = this.modManager.Paths.AssemblyCachePath;
+        string cacheFilePath = this.assemblyCachePath;
         if (!Directory.Exists(Path.GetDirectoryName(cacheFilePath)))
         {
             this.assemblyCache = null;
@@ -145,7 +154,7 @@ internal sealed class InitializeContext
         if (!this.useAssemblyCache)
             return;
 
-        string cacheFilePath = this.modManager.Paths.AssemblyCachePath;
+        string cacheFilePath = this.assemblyCachePath;
         try
         {
             string cacheFileDirectory = Path.GetDirectoryName(cacheFilePath);
@@ -184,7 +193,7 @@ internal sealed class InitializeContext
             List<Mod> importedMods = new();
             HashSet<string> modGuids = new();
 
-            foreach (string directory in Directory.GetDirectories(this.rootDirectory))
+            foreach (string directory in Directory.GetDirectories(this.modsDirectory))
             {
                 modImporters.Add(ModImporter.FromDirectory(
                     directory,
@@ -195,7 +204,7 @@ internal sealed class InitializeContext
                     this.assemblyCache));
             }
 
-            foreach (string zipFile in Directory.GetFiles(this.rootDirectory, "*.zip"))
+            foreach (string zipFile in Directory.GetFiles(this.modsDirectory, "*.zip"))
             {
                 modImporters.Add(ModImporter.FromZipFile(
                     zipFile,

@@ -1,4 +1,6 @@
-﻿using System.Collections.Generic;
+﻿using Mono.Cecil;
+using System;
+using System.Collections.Generic;
 using System.IO;
 
 namespace MipInEx.Bootstrap;
@@ -34,6 +36,12 @@ internal sealed class CachedAssembly : ICacheable
     }
     public List<PluginReference> InternalPlugins => this.internalPlugins;
     public List<string> AssemblyReferences => this.assemblyReferences;
+
+    public bool IsPluginAssembly
+        => this.mainPlugin != null;
+
+    public bool HasInternalPlugins
+        => this.internalPlugins.Count > 0;
 
     public void Load(BinaryReader binaryReader)
     {
@@ -108,6 +116,110 @@ internal sealed class CachedAssembly : ICacheable
         for (int index = 0; index < assemblyReferenceCount; index++)
         {
             binaryWriter.Write(this.assemblyReferences[index]);
+        }
+    }
+
+    public void InitializeFromCecilAssembly(AssemblyDefinition assembly, ModManifest manifestFallback)
+    {
+        foreach (TypeDefinition typeDefinition in assembly.MainModule.Types)
+        {
+            if (typeDefinition.IsInterface || typeDefinition.IsAbstract)
+                continue;
+
+            TypeDefinitionReference? resultReference = null;
+            bool isInternalPlugin = false;
+
+            TypeDefinition? baseTypeDefinition = typeDefinition.BaseType?.Resolve();
+            while (baseTypeDefinition != null)
+            {
+                if (baseTypeDefinition.FullName == "System.Object")
+                    break;
+
+                if (baseTypeDefinition.Namespace == Utility.pluginTypeNamespace)
+                {
+                    if (baseTypeDefinition.Name == Utility.pluginTypeName)
+                    {
+                        if (!baseTypeDefinition.IsGenericInstance)
+                        {
+                            resultReference = TypeDefinitionReference.Create(typeDefinition);
+                            isInternalPlugin = false;
+                            break;
+                        }
+                    }
+                    else if (baseTypeDefinition.Name == Utility.internalPluginTypeName)
+                    {
+                        int genericParameterCount = baseTypeDefinition.GenericParameters.Count;
+
+                        if (genericParameterCount == 0 || genericParameterCount == 1)
+                        {
+                            resultReference = TypeDefinitionReference.Create(typeDefinition);
+                            isInternalPlugin = true;
+                            break;
+                        }
+                    }
+                }
+
+                baseTypeDefinition = baseTypeDefinition.BaseType?.Resolve();
+            }
+
+            if (resultReference is null)
+                continue;
+
+            if (isInternalPlugin)
+            {
+                CustomAttribute? attribute = Utility.GetInternalPluginInfoAttribute(typeDefinition);
+                if (attribute is null)
+                    continue;
+
+                string? guid = (string?)attribute.ConstructorArguments[0].Value;
+                string? name = (string?)attribute.ConstructorArguments[1].Value;
+                string? versionString = (string?)attribute.ConstructorArguments[2].Value;
+
+                name = name?.Trim();
+
+                if (!ModPropertyUtil.TryValidateGuid(guid) ||
+                    !ModPropertyUtil.TryValidateName(name) ||
+                    !Version.TryParse(versionString, out Version? version))
+                {
+                    continue;
+                }
+
+                this.internalPlugins.Add(new PluginReference(resultReference, name!, guid!, version));
+            }
+            else
+            {
+                CustomAttribute? attribute = Utility.GetPluginInfoAttribute(typeDefinition);
+                if (attribute is null)
+                    continue;
+
+                string guid;
+                string name;
+                Version version;
+
+                if (attribute.ConstructorArguments.Count == 0)
+                {
+                    guid = manifestFallback.Guid;
+                    name = manifestFallback.Name;
+                    version = manifestFallback.Version;
+                }
+                else
+                {
+                    guid = (string?)attribute.ConstructorArguments[0].Value!;
+                    name = (string?)attribute.ConstructorArguments[1].Value!;
+                    string? versionString = (string?)attribute.ConstructorArguments[2].Value;
+
+                    name = name?.Trim()!;
+
+                    if (!ModPropertyUtil.TryValidateGuid(guid) ||
+                        !ModPropertyUtil.TryValidateName(name) ||
+                        !Version.TryParse(versionString, out version))
+                    {
+                        continue;
+                    }
+                }
+
+                this.mainPlugin = new PluginReference(resultReference, name, guid, version);
+            }
         }
     }
 }

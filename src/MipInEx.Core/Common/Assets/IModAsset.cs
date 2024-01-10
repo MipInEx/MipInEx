@@ -8,6 +8,11 @@ namespace MipInEx;
 public interface IModAsset
 {
     /// <summary>
+    /// The name of this asset.
+    /// </summary>
+    string Name { get; }
+
+    /// <summary>
     /// The manifest of this asset.
     /// </summary>
     IModAssetManifest Manifest { get; }
@@ -24,9 +29,14 @@ public interface IModAsset
     ModManagerBase ModManager { get; }
 
     /// <summary>
-    /// The full asset path of this mod asset.
+    /// The asset path of this mod asset.
     /// </summary>
     string AssetPath { get; }
+
+    /// <summary>
+    /// The full asset path of this mod asset.
+    /// </summary>
+    string FullAssetPath { get; }
 
     /// <summary>
     /// The state of the mod asset.

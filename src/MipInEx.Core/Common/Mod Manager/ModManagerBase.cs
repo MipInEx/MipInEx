@@ -31,7 +31,10 @@ public abstract partial class ModManagerBase
     /// </summary>
     public ModRegistry Registry => this.registry.Registry;
 
-    public abstract ModManagerPaths Paths { get; }
+    /// <summary>
+    /// The path the config directory.
+    /// </summary>
+    public abstract string ConfigDirectory { get; }
 
     internal void EnqueueModToLoad(Mod mod)
     {
@@ -316,62 +319,4 @@ public abstract partial class ModManagerBase
             }
         }
     }
-}
-
-/// <summary>
-/// The paths of a <see cref="IModManager"/>.
-/// </summary>
-public sealed class ModManagerPaths
-{
-    private readonly string gameAssembliesDirectory;
-    private readonly string modsDirectory;
-    private readonly string configDirectory;
-    private readonly string assemblyCachePath;
-
-    /// <summary>
-    /// Initializes this paths instance.
-    /// </summary>
-    /// <param name="gameAssembliesDirectory">
-    /// The path to the game assemblies directory.
-    /// </param>
-    /// <param name="modsDirectory">
-    /// The path to the mods directory.
-    /// </param>
-    /// <param name="configDirectory">
-    /// The path the config directory.
-    /// </param>
-    /// <param name="assemblyCachePath">
-    /// The path to the assembly cache file.
-    /// </param>
-    public ModManagerPaths(
-        string gameAssembliesDirectory,
-        string modsDirectory,
-        string configDirectory,
-        string assemblyCachePath)
-    {
-        this.gameAssembliesDirectory = gameAssembliesDirectory;
-        this.modsDirectory = modsDirectory;
-        this.configDirectory = configDirectory;
-        this.assemblyCachePath = assemblyCachePath;
-    }
-
-    /// <summary>
-    /// The path to the game's assemblies.
-    /// </summary>
-    public string GameAssembliesDirectory => this.gameAssembliesDirectory;
-
-    /// <summary>
-    /// The path to the mod directory.
-    /// </summary>
-    public string ModsDirectory => this.modsDirectory;
-
-    /// <summary>
-    /// The path to the config directory.
-    /// </summary>
-    public string ConfigDirectory => this.configDirectory;
-
-    /// <summary>
-    /// The path to the assembly cache file.
-    /// </summary>
-    public string AssemblyCachePath => this.assemblyCachePath;
 }

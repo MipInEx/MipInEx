@@ -102,7 +102,7 @@ public abstract class ModRootPluginBase : IModRootPluginInstanceImpl
         if (this.assemblyPlugin is not null) return;
         this.assemblyPlugin = assemblyPlugin;
         this.patcher = new Harmony(this.Guid);
-        this.config = new ConfigFile(System.IO.Path.Combine(assemblyPlugin.Mod.ModManager.Paths.ConfigDirectory, this.Guid + ".cfg"), false, assemblyPlugin.Metadata);
+        this.config = new ConfigFile(System.IO.Path.Combine(assemblyPlugin.Mod.ModManager.ConfigDirectory, this.Guid + ".cfg"), false, assemblyPlugin.Metadata);
         this.logger = MipInEx.Logging.Logger.CreateLogSource(this.Name);
     }
 }

@@ -90,7 +90,7 @@ public sealed class ModAssemblyManifest : IModAssetManifest
     /// Returns
     /// <c>"Assemblies/{<see langword="this"/>.<see cref="AssetPath">AssetPath</see>}.dll"</c>
     /// </remarks>
-    public string LongAssetPath => "Assemblies/" + this.assetPath + ".dll";
+    public string FullAssetPath => "Assemblies/" + this.assetPath + ".dll";
 
     /// <summary>
     /// The settings for the root plugin in this assembly.

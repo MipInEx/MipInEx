@@ -106,7 +106,7 @@ public abstract class ModInternalPluginBase : IModInternalPluginInstanceImpl
         this.patcher = new Harmony(fullGuid);
         this.config = new ConfigFile(
             System.IO.Path.Combine(
-                this.root.ModManager.Paths.ConfigDirectory,
+                this.root.ModManager.ConfigDirectory,
                 fullGuid + ".cfg"),
             false,
             assemblyPlugin.Metadata);
@@ -220,7 +220,7 @@ public abstract class ModInternalPluginBase<TRoot> : IModInternalPluginInstanceI
         this.patcher = new Harmony(fullGuid);
         this.config = new ConfigFile(
             System.IO.Path.Combine(
-                this.root.ModManager.Paths.ConfigDirectory,
+                this.root.ModManager.ConfigDirectory,
                 fullGuid + ".cfg"),
             false,
             assemblyPlugin.Metadata);

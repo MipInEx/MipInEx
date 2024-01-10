@@ -13,7 +13,7 @@ public interface IModAssetManifest
     /// <summary>
     /// The long asset path of this asset.
     /// </summary>
-    string LongAssetPath { get; }
+    string FullAssetPath { get; }
 
     /// <summary>
     /// The load priority of this asset. The higher the value,

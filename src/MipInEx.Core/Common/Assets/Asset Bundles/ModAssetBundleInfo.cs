@@ -11,12 +11,12 @@ public sealed class ModAssetBundleInfo : IModAssetInfo
     private ModAssetState state;
     private readonly string name;
     private readonly string assetPath;
-    private readonly string longAssetPath;
+    private readonly string fullAssetPath;
 
     internal ModAssetBundleInfo(
         string name,
         string assetPath,
-        string longAssetPath,
+        string fullAssetPath,
         ModAssetBundle bundle)
     {
         this.mod = null!;
@@ -24,7 +24,7 @@ public sealed class ModAssetBundleInfo : IModAssetInfo
 
         this.name = name;
         this.assetPath = assetPath;
-        this.longAssetPath = longAssetPath;
+        this.fullAssetPath = fullAssetPath;
 
 #if UNITY_ENGINE
         this.Delegate__Contains_String = bundle.Contains;
@@ -47,8 +47,8 @@ public sealed class ModAssetBundleInfo : IModAssetInfo
     /// <inheritdoc cref="ModAssetBundle.AssetPath"/>
     public string AssetPath => this.assetPath;
 
-    /// <inheritdoc cref="ModAssetBundle.LongAssetPath"/>
-    public string LongAssetPath => this.longAssetPath;
+    /// <inheritdoc cref="ModAssetBundle.FullAssetPath"/>
+    public string FullAssetPath => this.fullAssetPath;
 
     /// <inheritdoc cref="ModAssetBundle.State"/>
     public ModAssetState State => this.state;

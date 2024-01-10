@@ -38,7 +38,7 @@ public sealed class ModManifest : IEquatable<ModManifest>
         this.author = author;
         this.version = version;
         this.assetsByAssetPath = assets
-            .ToFrozenDictionary(x => x.LongAssetPath);
+            .ToFrozenDictionary(x => x.FullAssetPath);
         this.assemblyAssetsByAssetPath = assets
             .OfType<ModAssemblyManifest>()
             .ToFrozenDictionary(x => x.AssetPath);

@@ -18,7 +18,7 @@ public sealed class ModAssembly : IModAsset
 {
     private readonly ModAssemblyInfo info;
     private readonly Mod mod;
-    private readonly ModAssemblyLoader loader;
+    private readonly ModAssemblyImporter importer;
     private readonly ModAssemblyManifest manifest;
 
     private Assembly? instance;
@@ -32,13 +32,13 @@ public sealed class ModAssembly : IModAsset
     internal ModAssembly(
         Mod mod,
         ModAssemblyManifest manifest,
-        ModAssemblyLoader loader,
+        ModAssemblyImporter importer,
         PluginReference rootPluginReference,
         IEnumerable<PluginReference> internalPluginReferences)
     {
         this.mod = mod;
         this.manifest = manifest;
-        this.loader = loader;
+        this.importer = importer;
         this.rootPlugin = new ModAssemblyRootPlugin(
             this,
             rootPluginReference.Type,
@@ -85,18 +85,17 @@ public sealed class ModAssembly : IModAsset
         this.internalPlugins = new InternalPluginCollection(internalPlugins.ToImmutableArray());
 
         this.info = new(
-            loader.Name,
-            Utility.ShortenAssetPathWithoutExtension(
-                loader.LongAssetPath, 
+            importer.Name,
+            Utility.ShortenAssetPath(
+                importer.FullAssetPath, 
                 "Assemblies",
-                ".dll",
                 StringComparison.OrdinalIgnoreCase),
-            loader.LongAssetPath,
+            importer.FullAssetPath,
             this.rootPlugin.Info,
             internalPlugins.Select(x => x.Info).ToImmutableArray());
     }
 
-    internal ModAssemblyLoader Loader => this.loader;
+    internal ModAssemblyImporter Importer => this.importer;
 
     /// <summary>
     /// The root plugin in this assembly.
@@ -136,13 +135,18 @@ public sealed class ModAssembly : IModAsset
     /// </summary>
     public string Name => this.info.Name;
 
-    /// <inheritdoc cref="ModAssemblyManifest.AssetPath"/>
+    /// <summary>
+    /// The path of the assembly asset. 
+    /// </summary>
     public string AssetPath => this.info.AssetPath;
 
-    /// <inheritdoc cref="ModAssemblyManifest.LongAssetPath"/>
-    public string LongAssetPath => this.info.LongAssetPath;
+    /// <summary>
+    /// The full asset path of the assembly asset.
+    /// </summary>
+    public string FullAssetPath => this.info.FullAssetPath;
 
-    string IModAsset.AssetPath => this.info.LongAssetPath;
+    string IModAsset.AssetPath => this.info.AssetPath;
+    string IModAsset.FullAssetPath => this.info.FullAssetPath;
 
     /// <summary>
     /// The state of this assembly.
@@ -213,7 +217,7 @@ public sealed class ModAssembly : IModAsset
         {
             if (this.instance == null)
             {
-                this.instance = this.loader.Load();
+                this.instance = this.importer.Import();
             }
 
             if (!this.rootPlugin.IsLoaded)
@@ -446,7 +450,7 @@ public sealed class ModAssembly : IModAsset
                 Assembly assembly;
                 try
                 {
-                    assembly = this.modAssembly.loader.Load();
+                    assembly = this.modAssembly.importer.Import();
                 }
                 catch (Exception ex)
                 {

@@ -54,7 +54,7 @@ public sealed class ModAssetBundleManifest : IModAssetManifest
     /// Returns
     /// <c>"Asset Bundles/{<see langword="this"/>.<see cref="AssetPath">AssetPath</see>}.bundle"</c>
     /// </remarks>
-    public string LongAssetPath => "Asset Bundles/" + this.assetPath + ".bundle";
+    public string FullAssetPath => "Asset Bundles/" + this.assetPath + ".bundle";
 
     /// <summary>
     /// The load priority of this asset bundle. The higher the

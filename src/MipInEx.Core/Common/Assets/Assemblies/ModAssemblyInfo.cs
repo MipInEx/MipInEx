@@ -16,14 +16,14 @@ public sealed class ModAssemblyInfo : IModAssetInfo
     private ModAssetState state;
     private readonly string name;
     private readonly string assetPath;
-    private readonly string longAssetPath;
+    private readonly string fullAssetPath;
     private readonly ModAssemblyRootPluginInfo rootPlugin;
     private readonly InternalPluginCollection internalPlugins;
 
     internal ModAssemblyInfo(
         string name,
         string assetPath,
-        string longAssetPath,
+        string fullAssetPath,
         ModAssemblyRootPluginInfo rootPlugin,
         ImmutableArray<ModAssemblyInternalPluginInfo> internalPlugins)
     {
@@ -31,7 +31,7 @@ public sealed class ModAssemblyInfo : IModAssetInfo
         this.state = ModAssetState.NotLoaded;
         this.name = name;
         this.assetPath = assetPath;
-        this.longAssetPath = longAssetPath;
+        this.fullAssetPath = fullAssetPath;
         this.rootPlugin = rootPlugin;
         this.internalPlugins = new InternalPluginCollection(internalPlugins);
     }
@@ -51,8 +51,8 @@ public sealed class ModAssemblyInfo : IModAssetInfo
     /// <inheritdoc cref="ModAssembly.AssetPath"/>
     public string AssetPath => this.assetPath;
 
-    /// <inheritdoc cref="ModAssembly.LongAssetPath"/>
-    public string LongAssetPath => this.longAssetPath;
+    /// <inheritdoc cref="ModAssembly.FullAssetPath"/>
+    public string FullAssetPath => this.fullAssetPath;
 
     /// <inheritdoc cref="ModAssembly.State"/>
     public ModAssetState State => this.state;

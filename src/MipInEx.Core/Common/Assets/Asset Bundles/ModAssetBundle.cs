@@ -17,7 +17,7 @@ public sealed class ModAssetBundle : IModAsset
 {
     private readonly ModAssetBundleInfo info;
     private readonly Mod mod;
-    private readonly ModAssetBundleLoader loader;
+    private readonly ModAssetBundleImporter importer;
     private readonly ModAssetBundleManifest manifest;
 
 #if UNITY_ENGINE
@@ -30,27 +30,26 @@ public sealed class ModAssetBundle : IModAsset
     internal ModAssetBundle(
         Mod mod,
         ModAssetBundleManifest manifest,
-        ModAssetBundleLoader loader)
+        ModAssetBundleImporter importer)
     {
         this.mod = mod;
-        this.loader = loader;
+        this.importer = importer;
         this.manifest = manifest;
         this.instance = null;
         this.loadOperation = null;
         this.unloadOperation = null;
 
         this.info = new ModAssetBundleInfo(
-            loader.Name,
-            Utility.ShortenAssetPathWithoutExtension(
-                loader.LongAssetPath,
-                "Assemblies",
-                ".dll",
+            importer.Name,
+            Utility.ShortenAssetPath(
+                importer.FullAssetPath,
+                "Asset Bundles",
                 StringComparison.OrdinalIgnoreCase),
-            loader.LongAssetPath,
+            importer.FullAssetPath,
             this);
     }
 
-    internal ModAssetBundleLoader Loader => this.loader;
+    internal ModAssetBundleImporter Importer => this.importer;
 
     /// <summary>
     /// The mod this asset bundle belongs to.
@@ -80,13 +79,18 @@ public sealed class ModAssetBundle : IModAsset
     /// </summary>
     public string Name => this.info.Name;
 
-    /// <inheritdoc cref="ModAssetBundleManifest.AssetPath"/>
+    /// <summary>
+    /// The path of the asset bundle asset. 
+    /// </summary>
     public string AssetPath => this.info.AssetPath;
 
-    /// <inheritdoc cref="ModAssetBundleManifest.LongAssetPath"/>
-    public string LongAssetPath => this.info.LongAssetPath;
+    /// <summary>
+    /// The full asset path of the asset bundle asset.
+    /// </summary>
+    public string FullAssetPath => this.info.FullAssetPath;
 
-    string IModAsset.AssetPath => this.info.LongAssetPath;
+    string IModAsset.AssetPath => this.info.AssetPath;
+    string IModAsset.FullAssetPath => this.info.FullAssetPath;
 
     /// <summary>
     /// The state of this asset bundle.
@@ -135,7 +139,7 @@ public sealed class ModAssetBundle : IModAsset
         else if (this.loadOperation != null)
             throw new InvalidOperationException("An existing async load request is already active!");
 
-        this.instance = this.loader.Load();
+        this.instance = this.importer.Import();
         this.info.SetState(ModAssetState.Loaded);
     }
 
@@ -357,7 +361,7 @@ public sealed class ModAssetBundle : IModAsset
             this.assetBundleInfo = assetBundleInfo;
             this.assetBundleInfo.info.SetState(ModAssetState.Loading);
 
-            this.asyncOperation = assetBundleInfo.loader.LoadAsync();
+            this.asyncOperation = assetBundleInfo.importer.ImportAsync();
             this.isDone = false;
         }
 
