@@ -56,6 +56,9 @@ public sealed class ModAssetBundleInfo : IModAssetInfo
     /// <inheritdoc cref="ModAssetBundle.IsLoaded"/>
     public bool IsLoaded => this.state == ModAssetState.Loaded;
 
+    /// <inheritdoc cref="ModAssetBundle.IsUnloaded"/>
+    public bool IsUnloaded => this.state is ModAssetState.Unloaded or ModAssetState.NotLoaded;
+
     /// <inheritdoc cref="ModAssetBundle.Type"/>
     public ModAssetType Type => ModAssetType.AssetBundle;
 

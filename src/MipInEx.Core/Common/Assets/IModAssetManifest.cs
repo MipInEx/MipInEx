@@ -19,7 +19,19 @@ public interface IModAssetManifest
     /// The load priority of this asset. The higher the value,
     /// the higher the priority.
     /// </summary>
+    /// <remarks>
+    /// Defaults to <c>0</c>.
+    /// </remarks>
     long LoadPriority { get; }
+
+    /// <summary>
+    /// Whether or not this asset needs to be explicitly loaded
+    /// (aka manually loaded)
+    /// </summary>
+    /// <remarks>
+    /// Defaults to <see langword="false"/>.
+    /// </remarks>
+    bool LoadManually { get; }
 
     /// <summary>
     /// The type of this asset.

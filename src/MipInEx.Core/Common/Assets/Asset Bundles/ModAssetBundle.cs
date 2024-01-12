@@ -103,6 +103,11 @@ public sealed class ModAssetBundle : IModAsset
     public bool IsLoaded => this.instance != null && this.info.IsLoaded;
 
     /// <summary>
+    /// Whether or not this asset bundle is unloaded.
+    /// </summary>
+    public bool IsUnloaded => this.instance == null && this.info.IsUnloaded;
+
+    /// <summary>
     /// The type of the mod asset.
     /// </summary>
     /// <remarks>
@@ -200,7 +205,7 @@ public sealed class ModAssetBundle : IModAsset
     /// </exception>
     public void Unload()
     {
-        if (!this.IsLoaded)
+        if (this.IsUnloaded)
             return;
         else if (this.loadOperation != null)
             throw new InvalidOperationException("Cannot unload whilst the asset bundle is being loaded!");
@@ -242,10 +247,10 @@ public sealed class ModAssetBundle : IModAsset
     /// </returns>
     public ModAsyncOperation UnloadAsync()
     {
-        if (this.loadOperation != null)
-            return ModAsyncOperation.FromException(new InvalidOperationException("Cannot unload whilst the asset bundle is being loaded!"));
-        else if (!this.IsLoaded)
+        if (this.IsUnloaded)
             return ModAsyncOperation.Completed;
+        else if (this.loadOperation != null)
+            return ModAsyncOperation.FromException(new InvalidOperationException("Cannot unload whilst the asset bundle is being loaded!"));
 
         this.unloadOperation ??= new UnloadAsyncOperation(this);
         return this.unloadOperation;

@@ -75,9 +75,10 @@ public sealed class Mod
     private ImmutableArray<Mod> requiredDependencies;
     private ImmutableArray<Mod> dependencies;
 
-    private bool isEnabled;
     private bool isCircularDependency;
 
+    private LoadAsyncOperation? loadOperation;
+    private UnloadAsyncOperation? unloadOperation;
 
     internal Mod(
         ModManagerBase modManager,
@@ -180,11 +181,22 @@ public sealed class Mod
     /// </summary>
     public ModManifest Manifest => this.manifest;
 
-    public bool IsEnabled => this.isEnabled;
-
     public ModInfo Info => this.info;
 
+    /// <summary>
+    /// The state of this mod.
+    /// </summary>
+    public ModState State => this.info.State;
+
+    /// <summary>
+    /// Whether or not this mod is loaded.
+    /// </summary>
     public bool IsLoaded => this.info.IsLoaded;
+
+    /// <summary>
+    /// Whether or not this mod is unloaded.
+    /// </summary>
+    public bool IsUnloaded => this.info.IsUnloaded;
 
     /// <inheritdoc cref="ModManifest.ToString()"/>
     public sealed override string ToString()
@@ -288,6 +300,93 @@ public sealed class Mod
             this.dependencies);
     }
 
+    internal void Load()
+    {
+        if (this.IsLoaded)
+            return;
+        else if (this.unloadOperation != null)
+            throw new InvalidOperationException("Cannot load whilst the mod is being unloaded!");
+        else if (this.loadOperation != null)
+            throw new InvalidOperationException("An existing async load request is already active!");
+
+        this.info.SetState(ModState.Loading);
+        List<Exception> exceptions = new();
+
+        foreach (IModAsset asset in this.assets)
+        {
+            if (asset.IsLoaded || asset.Manifest.LoadManually)
+            {
+                continue;
+            }
+
+            try
+            {
+                asset.Load();
+            }
+            catch (Exception ex)
+            {
+                exceptions.Add(ex);
+            }
+        }
+
+        this.info.SetState(ModState.Loaded);
+        if (exceptions.Count > 0)
+        {
+            throw new AggregateException("Exceptions occurred whilst loading mod", exceptions);
+        }
+    }
+
+    internal ModAsyncOperation LoadAsync()
+    {
+        if (this.IsLoaded)
+            return ModAsyncOperation.Completed;
+        else if (this.unloadOperation != null)
+            return ModAsyncOperation.FromException(new InvalidOperationException("Cannot load whilst the mod is being unloaded!"));
+
+        this.loadOperation ??= new LoadAsyncOperation(this);
+        return this.loadOperation;
+    }
+
+    internal void Unload()
+    {
+        if (this.IsUnloaded)
+            return;
+        else if (this.loadOperation != null)
+            throw new InvalidOperationException("Cannot unload whilst the mod is being loaded!");
+        else if (this.unloadOperation != null)
+            throw new InvalidOperationException("An existing async unload request is already active!");
+
+        this.info.SetState(ModState.Unloading);
+
+        for (int index = this.assets.Count - 1; index >= 0; index--)
+        {
+            IModAsset asset = this.assets[index];
+            if (!asset.IsLoaded)
+            {
+                continue;
+            }
+
+            asset.Unload();
+
+        }
+
+        this.info.SetState(ModState.Unloaded);
+    }
+
+    internal ModAsyncOperation UnloadAsync()
+    {
+        if (this.IsUnloaded)
+            return ModAsyncOperation.Completed;
+        else if (this.loadOperation != null)
+            return ModAsyncOperation.FromException(new InvalidOperationException("Cannot unload whilst the mod is being loaded!"));
+
+        this.unloadOperation ??= new UnloadAsyncOperation(this);
+        return this.unloadOperation;
+    }
+
+    /// <summary>
+    /// The collection containing all assets in a mod.
+    /// </summary>
     public sealed class AssetCollection :
         IReadOnlyCollection<IModAsset>,
         ICollection<IModAsset>,
@@ -305,12 +404,44 @@ public sealed class Mod
                 .ToFrozenDictionary(x => x.FullAssetPath);
         }
 
-        public int Count => this.assets.Length;
+        /// <summary>
+        /// The number of assets in this collection.
+        /// </summary>
+        public int Count
+            => this.assets.Length;
 
+        /// <summary>
+        /// Gets the asset at the specified index.
+        /// </summary>
+        /// <param name="index">
+        /// The index of the mod asset.
+        /// </param>
+        /// <returns>
+        /// The mod asset at the specified index.
+        /// </returns>
+        public IModAsset this[int index]
+            => this.assets[index];
+
+        /// <summary>
+        /// Gets the asset with the specified full asset path.
+        /// </summary>
+        /// <param name="fullAssetPath">
+        /// The full asset path of the asset to get.
+        /// </param>
+        /// <returns>
+        /// The asset with the specified full asset path.
+        /// </returns>
+        /// <exception cref="ArgumentNullException">
+        /// <paramref name="fullAssetPath"/> is
+        /// <see langword="null"/>.
+        /// </exception>
+        /// <exception cref="KeyNotFoundException">
+        /// No asset was found from the specified
+        /// <paramref name="fullAssetPath"/>.
+        /// <paramref name="fullAssetPath"/>.
+        /// </exception>
         public IModAsset this[string fullAssetPath]
-        {
-            get => this.assetsByAssetPath[fullAssetPath];
-        }
+            => this.assetsByAssetPath[fullAssetPath];
 
         bool ICollection<IModAsset>.IsReadOnly => true;
         bool ICollection.IsSynchronized => true;
@@ -327,6 +458,19 @@ public sealed class Mod
             return this.assets.Contains(item);
         }
 
+        /// <summary>
+        /// Determines whether or not this asset collection
+        /// contains an asset at the specified
+        /// <paramref name="fullAssetPath"/>.
+        /// </summary>
+        /// <param name="fullAssetPath">
+        /// The full asset path of the asset to check.
+        /// </param>
+        /// <returns>
+        /// <see langword="true"/> if an asset exists at
+        /// <paramref name="fullAssetPath"/>;
+        /// <see langword="false"/>, otherwise.
+        /// </returns>
         public bool ContainsAsset([NotNullWhen(true)] string? fullAssetPath)
         {
             return fullAssetPath is not null &&
@@ -343,6 +487,22 @@ public sealed class Mod
             ((ICollection)this.assets).CopyTo(array, index);
         }
 
+        /// <summary>
+        /// Gets an enumerator to enumerate through this asset
+        /// collection.
+        /// </summary>
+        /// <remarks>
+        /// The returned enumerator struct does not implement
+        /// <see cref="IEnumerator{T}"/> to improve
+        /// performance due to not needing to dispose the
+        /// enumerator. However, the methods on the enumerator
+        /// struct allow it to be used in a
+        /// <see langword="foreach"/> loop.
+        /// </remarks>
+        /// <returns>
+        /// An enumerator to enumerate through this asset
+        /// collection.
+        /// </returns>
         public Enumerator GetEnumerator()
         {
             return new Enumerator(this);
@@ -361,6 +521,25 @@ public sealed class Mod
         bool ICollection<IModAsset>.Remove(IModAsset item)
             => throw new NotSupportedException();
 
+
+        /// <summary>
+        /// Attempts to get the asset at the specified
+        /// <paramref name="fullAssetPath"/>.
+        /// </summary>
+        /// <param name="fullAssetPath">
+        /// The full asset path of the asset to get.
+        /// </param>
+        /// <param name="asset">
+        /// If this method returns <see langword="true"/>, then
+        /// the value will be the found asset, otherwise if
+        /// this method returns <see langword="false"/>, then
+        /// the value will be <see langword="default"/>.
+        /// </param>
+        /// <returns>
+        /// <see langword="true"/> if this collection contains
+        /// an asset at <paramref name="fullAssetPath"/>;
+        /// <see langword="false"/>, otherwise.
+        /// </returns>
         public bool TryGetAsset([NotNullWhen(true)] string? fullAssetPath, [NotNullWhen(true)] out IModAsset? asset)
         {
             if (fullAssetPath is null)
@@ -372,6 +551,10 @@ public sealed class Mod
             return this.assetsByAssetPath.TryGetValue(fullAssetPath, out asset);
         }
 
+        /// <summary>
+        /// An enumerator that enumerates through an asset
+        /// collection.
+        /// </summary>
         public readonly struct Enumerator
         {
             private readonly ImmutableArray<IModAsset>.Enumerator enumerator;
@@ -381,14 +564,32 @@ public sealed class Mod
                 this.enumerator = collection.assets.GetEnumerator();
             }
 
+            /// <summary>
+            /// The current mod asset.
+            /// </summary>
             public IModAsset Current
                 => this.enumerator.Current;
 
+            /// <summary>
+            /// Advances to the next mod asset.
+            /// </summary>
+            /// <returns>
+            /// <see langword="true"/> if another mod asset
+            /// exists in the collection;
+            /// <see langword="false"/>, otherwise.
+            /// </returns>
             public bool MoveNext()
                 => this.enumerator.MoveNext();
         }
     }
 
+    /// <summary>
+    /// The collection containing assets of a specified type in
+    /// a mod.
+    /// </summary>
+    /// <typeparam name="TAsset">
+    /// The type of asset this collection holds.
+    /// </typeparam>
     public sealed class AssetCollection<TAsset> :
         IReadOnlyCollection<TAsset>,
         ICollection<TAsset>,
@@ -407,12 +608,43 @@ public sealed class Mod
                 .ToFrozenDictionary(x => x.AssetPath);
         }
 
-        public int Count => this.assets.Length;
+        /// <summary>
+        /// The number of assets in this collection.
+        /// </summary>
+        public int Count
+            => this.assets.Length;
 
+        /// <summary>
+        /// Gets the asset at the specified index.
+        /// </summary>
+        /// <param name="index">
+        /// The index of the mod asset.
+        /// </param>
+        /// <returns>
+        /// The mod asset at the specified index.
+        /// </returns>
+        public TAsset this[int index]
+            => this.assets[index];
+
+        /// <summary>
+        /// Gets the asset with the specified asset path.
+        /// </summary>
+        /// <param name="assetPath">
+        /// The asset path of the asset to get.
+        /// </param>
+        /// <returns>
+        /// The asset with the specified asset path.
+        /// </returns>
+        /// <exception cref="ArgumentNullException">
+        /// <paramref name="assetPath"/> is
+        /// <see langword="null"/>.
+        /// </exception>
+        /// <exception cref="KeyNotFoundException">
+        /// No asset was found from the specified
+        /// <paramref name="assetPath"/>.
+        /// </exception>
         public TAsset this[string assetPath]
-        {
-            get => this.assetsByAssetPath[assetPath];
-        }
+            => this.assetsByAssetPath[assetPath];
 
         bool ICollection<TAsset>.IsReadOnly => true;
         bool ICollection.IsSynchronized => true;
@@ -429,6 +661,19 @@ public sealed class Mod
             return this.assets.Contains(item);
         }
 
+        /// <summary>
+        /// Determines whether or not this asset collection
+        /// contains an asset at the specified
+        /// <paramref name="assetPath"/>.
+        /// </summary>
+        /// <param name="assetPath">
+        /// The asset path of the asset to check.
+        /// </param>
+        /// <returns>
+        /// <see langword="true"/> if an asset exists at
+        /// <paramref name="assetPath"/>;
+        /// <see langword="false"/>, otherwise.
+        /// </returns>
         public bool ContainsAsset([NotNullWhen(true)] string? assetPath)
         {
             return assetPath is not null &&
@@ -445,6 +690,22 @@ public sealed class Mod
             ((ICollection)this.assets).CopyTo(array, index);
         }
 
+        /// <summary>
+        /// Gets an enumerator to enumerate through this asset
+        /// collection.
+        /// </summary>
+        /// <remarks>
+        /// The returned enumerator struct does not implement
+        /// <see cref="IEnumerator{T}"/> to improve
+        /// performance due to not needing to dispose the
+        /// enumerator. However, the methods on the enumerator
+        /// struct allow it to be used in a
+        /// <see langword="foreach"/> loop.
+        /// </remarks>
+        /// <returns>
+        /// An enumerator to enumerate through this asset
+        /// collection.
+        /// </returns>
         public Enumerator GetEnumerator()
         {
             return new Enumerator(this);
@@ -463,6 +724,24 @@ public sealed class Mod
         bool ICollection<TAsset>.Remove(TAsset item)
             => throw new NotSupportedException();
 
+        /// <summary>
+        /// Attempts to get the asset at the specified
+        /// <paramref name="assetPath"/>.
+        /// </summary>
+        /// <param name="assetPath">
+        /// The asset path of the asset to get.
+        /// </param>
+        /// <param name="asset">
+        /// If this method returns <see langword="true"/>, then
+        /// the value will be the found asset, otherwise if
+        /// this method returns <see langword="false"/>, then
+        /// the value will be <see langword="default"/>.
+        /// </param>
+        /// <returns>
+        /// <see langword="true"/> if this collection contains
+        /// an asset at <paramref name="assetPath"/>;
+        /// <see langword="false"/>, otherwise.
+        /// </returns>
         public bool TryGetAsset([NotNullWhen(true)] string? assetPath, [NotNullWhen(true)] out TAsset? asset)
         {
             if (assetPath is null)
@@ -474,6 +753,10 @@ public sealed class Mod
             return this.assetsByAssetPath.TryGetValue(assetPath, out asset);
         }
 
+        /// <summary>
+        /// An enumerator that enumerates through an asset
+        /// collection.
+        /// </summary>
         public readonly struct Enumerator
         {
             private readonly ImmutableArray<TAsset>.Enumerator enumerator;
@@ -483,11 +766,292 @@ public sealed class Mod
                 this.enumerator = collection.assets.GetEnumerator();
             }
 
+            /// <summary>
+            /// The current mod asset.
+            /// </summary>
             public TAsset Current
                 => this.enumerator.Current;
 
+            /// <summary>
+            /// Advances to the next mod asset.
+            /// </summary>
+            /// <returns>
+            /// <see langword="true"/> if another mod asset
+            /// exists in the collection;
+            /// <see langword="false"/>, otherwise.
+            /// </returns>
             public bool MoveNext()
                 => this.enumerator.MoveNext();
+        }
+    }
+
+    private sealed class LoadAsyncOperation : ModAsyncMultiOperation
+    {
+        private readonly Mod mod;
+        private readonly ImmutableArray<IModAsset> allAssets;
+        private readonly List<Exception> allExceptions;
+        private ModAsyncOperation? currentOperation;
+        private int index;
+        private Exception? rootException;
+
+        public LoadAsyncOperation(Mod mod)
+        {
+            this.mod = mod;
+            this.allAssets = mod.assets
+                .Where(x => !x.Manifest.LoadManually)
+                .ToImmutableArray();
+            this.allExceptions = new();
+
+            this.index = -1;
+            this.currentOperation = null;
+            this.rootException = null;
+        }
+
+        public sealed override ModAsyncOperationStatus Status
+        {
+            get
+            {
+                if (this.index == -1)
+                    return ModAsyncOperationStatus.NotStarted;
+                else if (this.index >= this.allAssets.Length)
+                {
+                    if (this.rootException is null)
+                        return ModAsyncOperationStatus.SuccessComplete;
+                    else
+                        return ModAsyncOperationStatus.FaultComplete;
+                }
+                else
+                    return ModAsyncOperationStatus.Running;
+            }
+        }
+        public sealed override bool IsRunning => this.index > -1 && this.index < this.allAssets.Length;
+        public sealed override bool IsCompleted => this.index >= this.allAssets.Length;
+        public sealed override bool IsCompletedSuccessfully => this.index >= this.allAssets.Length && this.rootException is null;
+        public sealed override bool IsFaulted => this.index >= this.allAssets.Length && this.rootException is not null;
+        public sealed override Exception? Exception => this.rootException;
+
+        public sealed override int OperationCount
+            => this.allAssets.Length;
+        public sealed override int CompletedOperationCount
+            => Math.Clamp(0, this.index, this.allAssets.Length);
+
+
+        public sealed override double GetTotalProgress()
+        {
+            if (this.index < 0)
+                return 0.0;
+            else if (this.allAssets.Length == 0)
+                return 1.0;
+            else
+                return this.index + (this.currentOperation?.GetProgress() ?? 0.0);
+        }
+
+        public sealed override string? GetDescriptionString()
+        {
+            return this.currentOperation?.GetDescriptionString();
+        }
+
+        public sealed override double GetProgress()
+        {
+            if (this.index < 0)
+                return 0.0;
+            else if (this.allAssets.Length == 0)
+                return 1.0;
+            else
+                return (this.index + (this.currentOperation?.GetProgress() ?? 0.0)) / this.allAssets.Length;
+        }
+
+        public sealed override bool Process()
+        {
+            if (this.index >= this.allAssets.Length)
+            {
+                return true;
+            }
+
+            if (this.index < 0)
+            {
+                this.mod.info.SetState(ModState.Loading);
+                this.index++;
+                if (this.allAssets.Length == 0)
+                {
+                    this.mod.info.SetState(ModState.Loaded);
+                    this.mod.loadOperation = null;
+                    return true;
+                }
+            }
+
+            if (this.currentOperation == null)
+            {
+                this.currentOperation = this.allAssets[this.index].LoadAsync();
+                return false;
+            }
+
+            if (!this.currentOperation.Process())
+            {
+                return false;
+            }
+
+            if (this.currentOperation.IsFaulted)
+            {
+                Exception? ex = this.currentOperation.Exception;
+                if (ex != null)
+                {
+                    this.allExceptions.Add(ex);
+                }
+            }
+
+            this.currentOperation = null;
+            this.index++;
+
+            if (this.index >= this.allAssets.Length)
+            {
+                this.mod.info.SetState(ModState.Loaded);
+                if (this.allExceptions.Count > 0)
+                {
+                    this.rootException = new AggregateException("Exceptions occurred whilst loading mod", this.allExceptions);
+                }
+
+                this.mod.loadOperation = null;
+                return true;
+            }
+
+            this.currentOperation = this.allAssets[this.index].LoadAsync();
+            return false;
+        }
+    }
+
+    private sealed class UnloadAsyncOperation : ModAsyncMultiOperation
+    {
+        private readonly Mod mod;
+        private readonly ImmutableArray<IModAsset> allAssets;
+        private readonly List<Exception> allExceptions;
+        private ModAsyncOperation? currentOperation;
+        private int index;
+        private Exception? rootException;
+
+        public UnloadAsyncOperation(Mod mod)
+        {
+            this.mod = mod;
+            this.allAssets = mod.assets
+                .Reverse()
+                .ToImmutableArray();
+            this.allExceptions = new();
+
+            this.index = -1;
+            this.currentOperation = null;
+            this.rootException = null;
+        }
+
+        public sealed override ModAsyncOperationStatus Status
+        {
+            get
+            {
+                if (this.index == -1)
+                    return ModAsyncOperationStatus.NotStarted;
+                else if (this.index >= this.allAssets.Length)
+                {
+                    if (this.rootException is null)
+                        return ModAsyncOperationStatus.SuccessComplete;
+                    else
+                        return ModAsyncOperationStatus.FaultComplete;
+                }
+                else
+                    return ModAsyncOperationStatus.Running;
+            }
+        }
+        public sealed override bool IsRunning => this.index > -1 && this.index < this.allAssets.Length;
+        public sealed override bool IsCompleted => this.index >= this.allAssets.Length;
+        public sealed override bool IsCompletedSuccessfully => this.index >= this.allAssets.Length && this.rootException is null;
+        public sealed override bool IsFaulted => this.index >= this.allAssets.Length && this.rootException is not null;
+        public sealed override Exception? Exception => this.rootException;
+
+        public sealed override int OperationCount
+            => this.allAssets.Length;
+        public sealed override int CompletedOperationCount
+            => Math.Clamp(0, this.index, this.allAssets.Length);
+
+
+        public sealed override double GetTotalProgress()
+        {
+            if (this.index < 0)
+                return 0.0;
+            else if (this.allAssets.Length == 0)
+                return 1.0;
+            else
+                return this.index + (this.currentOperation?.GetProgress() ?? 0.0);
+        }
+
+        public sealed override string? GetDescriptionString()
+        {
+            return this.currentOperation?.GetDescriptionString();
+        }
+
+        public sealed override double GetProgress()
+        {
+            if (this.index < 0)
+                return 0.0;
+            else if (this.allAssets.Length == 0)
+                return 1.0;
+            else
+                return (this.index + (this.currentOperation?.GetProgress() ?? 0.0)) / this.allAssets.Length;
+        }
+
+        public sealed override bool Process()
+        {
+            if (this.index >= this.allAssets.Length)
+            {
+                return true;
+            }
+
+            if (this.index < 0)
+            {
+                this.mod.info.SetState(ModState.Unloading);
+                this.index++;
+                if (this.allAssets.Length == 0)
+                {
+                    this.mod.info.SetState(ModState.Unloaded);
+                    this.mod.unloadOperation = null;
+                    return true;
+                }
+            }
+
+            if (this.currentOperation == null)
+            {
+                this.currentOperation = this.allAssets[this.index].UnloadAsync();
+                return false;
+            }
+
+            if (!this.currentOperation.Process())
+            {
+                return false;
+            }
+
+            if (this.currentOperation.IsFaulted)
+            {
+                Exception? ex = this.currentOperation.Exception;
+                if (ex != null)
+                {
+                    this.allExceptions.Add(ex);
+                }
+            }
+
+            this.currentOperation = null;
+            this.index++;
+
+            if (this.index >= this.allAssets.Length)
+            {
+                this.mod.info.SetState(ModState.Unloaded);
+                if (this.allExceptions.Count > 0)
+                {
+                    this.rootException = new AggregateException("Exceptions occurred whilst unloading mod", this.allExceptions);
+                }
+
+                this.mod.unloadOperation = null;
+                return true;
+            }
+
+            this.currentOperation = this.allAssets[this.index].UnloadAsync();
+            return false;
         }
     }
 }

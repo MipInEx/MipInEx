@@ -60,6 +60,9 @@ public sealed class ModAssemblyInfo : IModAssetInfo
     /// <inheritdoc cref="ModAssembly.IsLoaded"/>
     public bool IsLoaded => this.state == ModAssetState.Loaded;
 
+    /// <inheritdoc cref="ModAssembly.IsUnloaded"/>
+    public bool IsUnloaded => this.state is ModAssetState.Unloaded or ModAssetState.NotLoaded;
+
     /// <inheritdoc cref="ModAssembly.Type"/>
     public ModAssetType Type => ModAssetType.Assembly;
 

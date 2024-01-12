@@ -159,6 +159,11 @@ public sealed class ModAssembly : IModAsset
     public bool IsLoaded => this.instance != null && this.info.IsLoaded;
 
     /// <summary>
+    /// Whether or not this assembly is unloaded.
+    /// </summary>
+    public bool IsUnloaded => this.instance == null && this.info.IsUnloaded;
+
+    /// <summary>
     /// The type of the mod asset.
     /// </summary>
     /// <remarks>
@@ -235,7 +240,7 @@ public sealed class ModAssembly : IModAsset
         }
         catch (Exception)
         {
-            this.info.SetState(ModAssetState.NotLoaded);
+            this.info.SetState(ModAssetState.Loaded);
             throw;
         }
 
@@ -300,7 +305,7 @@ public sealed class ModAssembly : IModAsset
     /// </exception>
     public void Unload()
     {
-        if (!this.IsLoaded)
+        if (this.IsUnloaded)
             return;
         else if (this.loadOperation != null)
             throw new InvalidOperationException("Cannot unload whilst the assembly is being loaded!");
@@ -374,23 +379,14 @@ public sealed class ModAssembly : IModAsset
     /// </returns>
     public ModAsyncOperation UnloadAsync()
     {
-        if (this.loadOperation != null)
-            return ModAsyncOperation.FromException(new InvalidOperationException("Cannot unload whilst the assembly is being loaded!"));
-        else if (!this.IsLoaded)
+        if (this.IsUnloaded)
             return ModAsyncOperation.Completed;
+        else if (this.loadOperation != null)
+            return ModAsyncOperation.FromException(new InvalidOperationException("Cannot unload whilst the assembly is being loaded!"));
 
         this.unloadOperation ??= new UnloadAsyncOperation(this);
         return this.unloadOperation;
     }
-
-    ModAsyncOperation IModAsset.LoadAsync()
-        => ModAsyncOperation.FromException(new NotSupportedException());
-
-    void IModAsset.Unload()
-        => throw new NotSupportedException();
-
-    ModAsyncOperation IModAsset.UnloadAsync()
-        => ModAsyncOperation.FromException(new NotSupportedException());
 
     private sealed class LoadAssemblyAsyncOperation : ModAsyncOperation
     {

@@ -10,7 +10,7 @@ public interface IModInternalPluginInstance : IModPluginInstance
     /// </summary>
     IModRootPluginInstance RootPlugin { get; }
 
-    /// <inheritdoc cref="ModInternalPluginInfo.Metadata"/>
+    /// <inheritdoc cref="ModAssemblyInternalPlugin.Metadata"/>
     new ModInternalPluginMetadata Metadata { get; }
 
     /// <summary>

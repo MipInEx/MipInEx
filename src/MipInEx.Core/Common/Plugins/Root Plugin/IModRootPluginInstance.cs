@@ -5,7 +5,7 @@
 /// </summary>
 public interface IModRootPluginInstance : IModPluginInstance
 {
-    /// <inheritdoc cref="ModRootPluginInfo.Metadata"/>
+    /// <inheritdoc cref="ModAssemblyRootPlugin.Metadata"/>
     new ModRootPluginMetadata Metadata { get; }
 
     /// <summary>

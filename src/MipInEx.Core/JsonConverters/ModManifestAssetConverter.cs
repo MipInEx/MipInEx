@@ -193,11 +193,11 @@ public sealed class ModManifestAssetConverter : JsonConverter<IModAssetManifest>
         {
             if (internalPlugins.Count > 0)
             {
-                return new ModAssemblyManifest(assetPath!, loadPriority, plugin);
+                return new ModAssemblyManifest(assetPath!, loadPriority, loadManually, plugin);
             }
             else
             {
-                return new ModAssemblyManifest(assetPath!, loadPriority, plugin, internalPlugins);
+                return new ModAssemblyManifest(assetPath!, loadPriority, loadManually, plugin, internalPlugins);
             }
         }
         else
@@ -220,6 +220,7 @@ public sealed class ModManifestAssetConverter : JsonConverter<IModAssetManifest>
         {
             writer.WriteString(ModManifestAssetConverter.assetPathProperty, assembly.AssetPath);
             writer.WriteNumber(ModManifestAssetConverter.loadPriorityProperty, assembly.LoadPriority);
+            writer.WriteBoolean(ModManifestAssetConverter.loadManuallyProperty, assembly.LoadManually);
             // note: we skip 'plugin' property as it's empty.
             writer.WritePropertyName(ModManifestAssetConverter.internalPluginsProperty);
             writer.WriteStartArray();
@@ -233,6 +234,7 @@ public sealed class ModManifestAssetConverter : JsonConverter<IModAssetManifest>
         {
             writer.WriteString(ModManifestAssetConverter.assetPathProperty, value.AssetPath);
             writer.WriteNumber(ModManifestAssetConverter.loadPriorityProperty, value.LoadPriority);
+            writer.WriteBoolean(ModManifestAssetConverter.loadManuallyProperty, value.LoadManually);
         }
 
         writer.WriteString(ModManifestAssetConverter.typeProperty, value.Type.Name);

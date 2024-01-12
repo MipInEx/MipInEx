@@ -12,6 +12,7 @@ public sealed class ModAssemblyManifest : IModAssetManifest
 {
     private readonly string assetPath;
     private readonly long loadPriority;
+    private readonly bool loadManually;
     private readonly ModRootPluginManifest plugin;
     private readonly ImmutableArray<ModInternalPluginManifest> internalPlugins;
 
@@ -26,16 +27,21 @@ public sealed class ModAssemblyManifest : IModAssetManifest
     /// The load priority of this assembly. The higher the
     /// value, the higher the priority.
     /// </param>
+    /// <param name="loadManually">
+    /// Whether or not this assembly needs to be manually
+    /// loaded.
+    /// </param>
     /// <param name="plugin">
     /// The settings for the root plugin in the assembly.
     /// </param>
     /// <exception cref="ArgumentNullException">
     /// <paramref name="assetPath"/> is <see langword="null"/>.
     /// </exception>
-    public ModAssemblyManifest(string assetPath, long loadPriority, ModRootPluginManifest? plugin)
+    public ModAssemblyManifest(string assetPath, long loadPriority, bool loadManually, ModRootPluginManifest? plugin)
     {
         this.assetPath = Utility.ValidateAssetPath(assetPath);
         this.loadPriority = loadPriority;
+        this.loadManually = loadManually;
         this.plugin = plugin ?? new ModRootPluginManifest();
         this.internalPlugins = ImmutableArray<ModInternalPluginManifest>.Empty;
     }
@@ -52,6 +58,10 @@ public sealed class ModAssemblyManifest : IModAssetManifest
     /// The load priority of this assembly. The higher the
     /// value, the higher the priority.
     /// </param>
+    /// <param name="loadManually">
+    /// Whether or not this assembly needs to be manually
+    /// loaded.
+    /// </param>
     /// <param name="plugin">
     /// The settings for the root plugin in the assembly.
     /// </param>
@@ -62,11 +72,12 @@ public sealed class ModAssemblyManifest : IModAssetManifest
     /// <exception cref="ArgumentNullException">
     /// <paramref name="assetPath"/> is <see langword="null"/>.
     /// </exception>
-    public ModAssemblyManifest(string assetPath, long loadPriority, ModRootPluginManifest? plugin, IEnumerable<ModInternalPluginManifest?>? internalPlugins)
+    public ModAssemblyManifest(string assetPath, long loadPriority, bool loadManually, ModRootPluginManifest? plugin, IEnumerable<ModInternalPluginManifest?>? internalPlugins)
     {
 
         this.assetPath = Utility.ValidateAssetPath(assetPath);
         this.loadPriority = loadPriority;
+        this.loadManually = loadManually;
         this.plugin = plugin ?? new ModRootPluginManifest();
         this.internalPlugins = internalPlugins is null ?
             ImmutableArray<ModInternalPluginManifest>.Empty :
@@ -93,11 +104,6 @@ public sealed class ModAssemblyManifest : IModAssetManifest
     public string FullAssetPath => "Assemblies/" + this.assetPath + ".dll";
 
     /// <summary>
-    /// The settings for the root plugin in this assembly.
-    /// </summary>
-    public ModRootPluginManifest Plugin => this.plugin;
-
-    /// <summary>
     /// The load priority of this assembly. The higher the
     /// value, the higher the priority.
     /// </summary>
@@ -106,6 +112,20 @@ public sealed class ModAssemblyManifest : IModAssetManifest
     /// <c>0</c>.
     /// </remarks>
     public long LoadPriority => this.loadPriority;
+
+    /// <summary>
+    /// Whether or not this assembly needs to be explicitly
+    /// loaded (aka manually loaded)
+    /// </summary>
+    /// <remarks>
+    /// Defaults to <see langword="false"/>.
+    /// </remarks>
+    public bool LoadManually => this.loadManually;
+
+    /// <summary>
+    /// The settings for the root plugin in this assembly.
+    /// </summary>
+    public ModRootPluginManifest Plugin => this.plugin;
 
     /// <summary>
     /// A collection of the settings for the internal plugins
@@ -134,6 +154,6 @@ public sealed class ModAssemblyManifest : IModAssetManifest
     /// </returns>
     public static ModAssemblyManifest CreateDefault(string assetPath)
     {
-        return new ModAssemblyManifest(assetPath, 0, null, null);
+        return new ModAssemblyManifest(assetPath, 0, false, null, null);
     }
 }

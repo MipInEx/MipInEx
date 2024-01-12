@@ -14,6 +14,8 @@ namespace MipInEx;
 /// </summary>
 public sealed class ModInfo
 {
+    private ModState state;
+
     private readonly string name;
     private readonly string guid;
     private readonly Version version;
@@ -30,6 +32,8 @@ public sealed class ModInfo
 
     internal ModInfo(Mod mod)
     {
+        this.state = ModState.Unloaded;
+
         this.name = mod.Manifest.Name;
         this.guid = mod.Manifest.Guid;
         this.version = mod.Manifest.Version;
@@ -93,8 +97,11 @@ public sealed class ModInfo
     /// <inheritdoc cref="Mod.Author"/>
     public string Author => this.author;
 
+    /// <inheritdoc cref="Mod.Assets"/>
     public AssetCollection Assets => this.assets;
+    /// <inheritdoc cref="Mod.Assemblies"/>
     public AssetCollection<ModAssemblyInfo> Assemblies => this.assemblies;
+    /// <inheritdoc cref="Mod.AssetBundles"/>
     public AssetCollection<ModAssetBundleInfo> AssetBundles => this.assetBundles;
 
     /// <inheritdoc cref="Mod.Incompatibilities"/>
@@ -109,10 +116,20 @@ public sealed class ModInfo
     /// <inheritdoc cref="Mod.Dependencies"/>
     public IReadOnlyList<ModInfo> Dependencies => this.dependencies;
 
-    /// <summary>
-    /// Whether or not this mod is loaded.
-    /// </summary>
-    public bool IsLoaded => false;
+    /// <inheritdoc cref="Mod.State"/>
+    public ModState State => this.state;
+
+    /// <inheritdoc cref="Mod.IsLoaded"/>
+    public bool IsLoaded => this.state == ModState.Loaded;
+
+    /// <inheritdoc cref="Mod.IsUnloaded"/>
+    public bool IsUnloaded => this.state == ModState.Unloaded;
+
+    /// <inheritdoc cref="Mod.ToString()"/>
+    public sealed override string ToString()
+    {
+        return $"{this.Guid} v{this.Version} by {this.Author}";
+    }
 
     internal void RefreshIncompatibilitiesAndDependencies(
         ImmutableArray<Mod> incompatibilities,
@@ -132,12 +149,12 @@ public sealed class ModInfo
             .ToImmutableArray();
     }
 
-    /// <inheritdoc cref="Mod.ToString()"/>
-    public sealed override string ToString()
+    internal void SetState(ModState state)
     {
-        return $"{this.Guid} v{this.Version} by {this.Author}";
+        this.state = state;
     }
 
+    /// <inheritdoc cref="Mod.AssetCollection"/>
     public sealed class AssetCollection :
         IReadOnlyCollection<IModAssetInfo>,
         ICollection<IModAssetInfo>,
@@ -163,12 +180,17 @@ public sealed class ModInfo
                     x => x);
         }
 
-        public int Count => this.assets.Length;
+        /// <inheritdoc cref="Mod.AssetCollection.Count"/>
+        public int Count
+            => this.assets.Length;
 
+        /// <inheritdoc cref="Mod.AssetCollection.this[int]"/>
+        public IModAssetInfo this[int index]
+            => this.assets[index];
+
+        /// <inheritdoc cref="Mod.AssetCollection.this[string]"/>
         public IModAssetInfo this[string fullAssetPath]
-        {
-            get => this.assetsByAssetPath[fullAssetPath];
-        }
+            => this.assetsByAssetPath[fullAssetPath];
 
         bool ICollection<IModAssetInfo>.IsReadOnly => true;
         bool ICollection.IsSynchronized => true;
@@ -185,6 +207,7 @@ public sealed class ModInfo
             return this.assets.Contains(item);
         }
 
+        /// <inheritdoc cref="Mod.AssetCollection.ContainsAsset(string?)"/>
         public bool ContainsAsset([NotNullWhen(true)] string? fullAssetPath)
         {
             return fullAssetPath is not null &&
@@ -201,6 +224,7 @@ public sealed class ModInfo
             ((ICollection)this.assets).CopyTo(array, index);
         }
 
+        /// <inheritdoc cref="Mod.AssetCollection.GetEnumerator()"/>
         public Enumerator GetEnumerator()
         {
             return new Enumerator(this);
@@ -219,6 +243,7 @@ public sealed class ModInfo
         bool ICollection<IModAssetInfo>.Remove(IModAssetInfo item)
             => throw new NotSupportedException();
 
+        /// <inheritdoc cref="Mod.AssetCollection.TryGetAsset(string?, out IModAsset?)"/>
         public bool TryGetAsset([NotNullWhen(true)] string? fullAssetPath, [NotNullWhen(true)] out IModAssetInfo? asset)
         {
             if (fullAssetPath is null)
@@ -230,6 +255,7 @@ public sealed class ModInfo
             return this.assetsByAssetPath.TryGetValue(fullAssetPath, out asset);
         }
 
+        /// <inheritdoc cref="Mod.AssetCollection.Enumerator"/>
         public readonly struct Enumerator
         {
             private readonly ImmutableArray<IModAssetInfo>.Enumerator enumerator;
@@ -239,14 +265,17 @@ public sealed class ModInfo
                 this.enumerator = collection.assets.GetEnumerator();
             }
 
+            /// <inheritdoc cref="Mod.AssetCollection.Enumerator.Current"/>
             public IModAssetInfo Current
                 => this.enumerator.Current;
 
+            /// <inheritdoc cref="Mod.AssetCollection.Enumerator.MoveNext()"/>
             public bool MoveNext()
                 => this.enumerator.MoveNext();
         }
     }
 
+    /// <inheritdoc cref="Mod.AssetCollection{TAsset}"/>
     public sealed class AssetCollection<TAsset> :
         IReadOnlyCollection<TAsset>,
         ICollection<TAsset>,
@@ -266,14 +295,22 @@ public sealed class ModInfo
                 this.assetsByAssetPath = FrozenDictionary<string, TAsset>.Empty;
                 return;
             }
+
+            this.assetsByAssetPath = assets
+                .ToFrozenDictionary(x => x.AssetPath);
         }
 
-        public int Count => this.assets.Length;
+        /// <inheritdoc cref="Mod.AssetCollection{TAsset}.Count"/>
+        public int Count
+            => this.assets.Length;
 
+        /// <inheritdoc cref="Mod.AssetCollection{TAsset}.this[int]"/>
+        public IModAssetInfo this[int index]
+            => this.assets[index];
+
+        /// <inheritdoc cref="Mod.AssetCollection{TAsset}.this[string]"/>
         public TAsset this[string assetPath]
-        {
-            get => this.assetsByAssetPath[assetPath];
-        }
+            => this.assetsByAssetPath[assetPath];
 
         bool ICollection<TAsset>.IsReadOnly => true;
         bool ICollection.IsSynchronized => true;
@@ -290,6 +327,7 @@ public sealed class ModInfo
             return this.assets.Contains(item);
         }
 
+        /// <inheritdoc cref="Mod.AssetCollection{TAsset}.ContainsAsset(string?)"/>
         public bool ContainsAsset([NotNullWhen(true)] string? assetPath)
         {
             return assetPath is not null &&
@@ -306,6 +344,7 @@ public sealed class ModInfo
             ((ICollection)this.assets).CopyTo(array, index);
         }
 
+        /// <inheritdoc cref="Mod.AssetCollection{TAsset}.GetEnumerator()"/>
         public Enumerator GetEnumerator()
         {
             return new Enumerator(this);
@@ -324,6 +363,7 @@ public sealed class ModInfo
         bool ICollection<TAsset>.Remove(TAsset item)
             => throw new NotSupportedException();
 
+        /// <inheritdoc cref="Mod.AssetCollection{TAsset}.TryGetAsset(string?, out TAsset)"/>
         public bool TryGetAsset([NotNullWhen(true)] string? assetPath, [NotNullWhen(true)] out TAsset? asset)
         {
             if (assetPath is null)
@@ -335,6 +375,7 @@ public sealed class ModInfo
             return this.assetsByAssetPath.TryGetValue(assetPath, out asset);
         }
 
+        /// <inheritdoc cref="Mod.AssetCollection{TAsset}.Enumerator"/>
         public readonly struct Enumerator
         {
             private readonly ImmutableArray<TAsset>.Enumerator enumerator;
@@ -344,9 +385,12 @@ public sealed class ModInfo
                 this.enumerator = collection.assets.GetEnumerator();
             }
 
+            /// <inheritdoc cref="Mod.AssetCollection{TAsset}.Enumerator.Current"/>
             public TAsset Current
                 => this.enumerator.Current;
 
+
+            /// <inheritdoc cref="Mod.AssetCollection{TAsset}.Enumerator.MoveNext()"/>
             public bool MoveNext()
                 => this.enumerator.MoveNext();
         }
